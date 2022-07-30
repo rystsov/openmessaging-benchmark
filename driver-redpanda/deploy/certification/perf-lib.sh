@@ -49,12 +49,15 @@ function retry-on-error () {
     while (( attempt < 5)); do
         sudo bash -c "echo $(date) attempting $args >> log"
         stated_s=$(date +%s)
-        eval $@
+        if [ ! eval $@ ]; then
+            sleep 5s
+            attempt=$(( $attempt + 1))
+        fi
         duration_s=$(( $(date +%s) - stated_s ))
         if (( duration_s > 60 )); then
             return 0
         fi
-        sleep 1s
+        sleep 5s
         attempt=$(( $attempt + 1))
     done
     exit 1
