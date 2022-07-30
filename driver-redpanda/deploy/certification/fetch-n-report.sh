@@ -11,7 +11,7 @@ mkdir -p results
 mkdir results/$1
 ansible-playbook fetch.yaml
 if [ ! -d fetched ]; then
-  echo "failed to fetch fetched" >> log
+  echo "$(date) failed to fetch fetched" >> log
   exit 1
 fi
 find fetched | grep foot | xargs -I{} mv {} results/$1/footprint.tar.bz2
