@@ -163,7 +163,7 @@ public class Benchmark {
 
             arguments.drivers.forEach(driverConfig -> {
                 try {
-		    String beginTime = dateFormat.format(new Date());
+		            String beginTime = dateFormat.format(new Date());
                     File driverConfigFile = new File(driverConfig);
                     DriverConfiguration driverConfiguration = mapper.readValue(driverConfigFile,
                             DriverConfiguration.class);
@@ -178,9 +178,9 @@ public class Benchmark {
                     WorkloadGenerator generator = new WorkloadGenerator(driverConfiguration.name, workload, worker);
 
                     TestResult result = generator.run();
-		    result.beginTime = beginTime;
-		    result.endTime = dateFormat.format(new Date());
-		    result.version = arguments.serviceVersion;
+		            result.beginTime = beginTime;
+		            result.endTime = dateFormat.format(new Date());
+		            result.version = arguments.serviceVersion;
 
                     String fileName;
                     if (arguments.output != null  && arguments.output.length() > 0) {
@@ -198,6 +198,7 @@ public class Benchmark {
                     log.error("Failed to run the workload '{}' for driver '{}'", workload.name, driverConfig, e);
                 } finally {
                     try {
+                        log.error("Stopping worker");
                         worker.stopAll();
                     } catch (IOException e) {
                     }
@@ -205,7 +206,9 @@ public class Benchmark {
             });
         });
 
+        log.error("Closing worker");
         worker.close();
+        log.error("Worker is closed");
     }
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory())
