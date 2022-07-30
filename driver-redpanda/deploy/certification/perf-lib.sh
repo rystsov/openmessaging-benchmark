@@ -28,20 +28,20 @@ export -f redpanda_wipe
 export -f redpanda_start
 
 function reset_all () {
-    sudo echo "Restarting workload" >> log
+    sudo bash -c 'echo "Restarting workload" >> log'
     cat /opt/benchmark/client | xargs -L 1 bash -c 'worker_stop "$@"' _
-    sudo echo "Restarting redpanda" >> log
+    sudo bash -c 'echo "Restarting redpanda" >> log'
     cat /opt/benchmark/redpanda | xargs -L 1 bash -c 'redpanda_stop "$@"' _
     cat /opt/benchmark/redpanda | xargs -L 1 bash -c 'redpanda_wipe "$@"' _
     cat /opt/benchmark/redpanda | xargs -L 1 bash -c 'redpanda_start "$@"' _
     sleep 10s
-    sudo echo "Redpanda is restarted" >> log
+    sudo bash -c 'echo "Redpanda is restarted" >> log'
     cat /opt/benchmark/client | xargs -L 1 bash -c 'worker_start "$@"' _
-    sudo echo "Workload is restarted" >> log
+    sudo bash -c 'echo "Workload is restarted" >> log'
 }
 
 function retry-on-error () {
-    sudo echo "retry-on-error $@" >> log
+    sudo bash -c "echo \"retry-on-error $@\" >> log"
     reset_all
 
     attempt=0
