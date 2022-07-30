@@ -21,8 +21,15 @@ for i in 1 2; do
         ansible-playbook redpanda.start.yaml
         echo "testing perf-footprint-smoke" >> log
         ansible-playbook test.yaml --extra-vars "test=perf-footprint-smoke"
+        echo "tested perf-footprint-smoke" >> log
         ./fetch-n-report.sh "$v-smoke-$i"
+        if [ ! -d results ]; then
+            echo "fetch-n-report.sh failed to build results" >> log
+            exit 1
+        fi
+        echo "stopping redpanda" >> log
         ansible-playbook redpanda.stop.yaml
+        echo "uninstalling redpanda" >> log
         ansible-playbook redpanda.uninstall.yaml
     done
     echo "destroying" >> log
