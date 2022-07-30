@@ -41,7 +41,8 @@ function reset_all () {
 }
 
 function retry-on-error () {
-    sudo bash -c "echo \"retry-on-error $@\" >> log"
+    args="$*"
+    sudo bash -c "echo retry-on-error $args >> log"
     reset_all
 
     attempt=0
