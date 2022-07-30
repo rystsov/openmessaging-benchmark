@@ -47,6 +47,7 @@ function retry-on-error () {
 
     attempt=0
     while (( attempt < 5)); do
+        sudo bash -c "echo $(date) attempting $args >> log"
         stated_s=$(date +%s)
         eval $@
         duration_s=$(( $(date +%s) - stated_s ))
