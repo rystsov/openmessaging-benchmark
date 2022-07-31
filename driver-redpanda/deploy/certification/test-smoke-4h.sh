@@ -7,11 +7,11 @@ if [ "$1" = "" ]; then
     exit 1
 fi
 
-echo "$(date) terraforming" >> log
-terraform apply -auto-approve -var="username=$1"
-sleep 1m
-
 for i in 1 2; do
+    echo "$(date) terraforming" >> log
+    terraform apply -auto-approve -var="username=$1"
+    sleep 1m
+    
     echo "$(date) deploying" >> log
     ansible-playbook deploy.yaml
     for v in "22.1.5" "22.2.1"; do
@@ -24,7 +24,7 @@ for i in 1 2; do
         echo "$(date) tested perf-footprint-smoke" >> log
         ./fetch-n-report.sh "$v-smoke-$i"
         if [ ! -d results ]; then
-            echo "fetch-n-report.sh failed to build results" >> log
+            echo "$(date) fetch-n-report.sh failed to build results" >> log
             exit 1
         fi
         echo "$(date) stopping redpanda" >> log
