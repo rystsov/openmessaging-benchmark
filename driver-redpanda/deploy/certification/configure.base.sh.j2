@@ -12,6 +12,7 @@ rpk config set redpanda.advertised_rpc_api '{
 address: {{ hostvars[inventory_hostname].private_ip }},
 port: 33145
 }' --format yaml
+rpk config set redpanda.group_topic_partitions 1
 rpk mode production
 
 {% if hostvars[groups['redpanda'][0]].id == hostvars[inventory_hostname].id %}
