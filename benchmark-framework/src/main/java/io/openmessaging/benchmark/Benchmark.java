@@ -178,13 +178,14 @@ public class Benchmark {
                     WorkloadGenerator generator = new WorkloadGenerator(driverConfiguration.name, workload, worker);
 
                     TestResult result = generator.run();
-		    result.beginTime = beginTime;
-		    result.endTime = dateFormat.format(new Date());
-		    result.version = arguments.serviceVersion;
+                    result.beginTime = beginTime;
+                    result.endTime = dateFormat.format(new Date());
+                    result.version = arguments.serviceVersion;
+                    result.workload = arguments.output;
 
                     String fileName;
                     if (arguments.output != null  && arguments.output.length() > 0) {
-                        fileName = arguments.output;
+                        fileName = arguments.output + ".json";
                     } else {
                         fileName = String.format("%s-%s-%s.json", workloadName, driverConfiguration.name,
                                 dateFormat.format(new Date()));
