@@ -82,7 +82,7 @@ public class RedpandaBenchmarkConsumer implements BenchmarkConsumer {
                         }
                     }
 
-                    if (!records.isEmpty()) {
+                    if (!offsetMap.isEmpty()) {
                         // Async commit all messages polled so far
                         consumer.commitAsync(offsetMap, null);
                     }
