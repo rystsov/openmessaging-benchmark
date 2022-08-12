@@ -63,6 +63,12 @@ public class Benchmark {
 
         @Parameter(description = "Workloads", required = true)
         public List<String> workloads;
+
+        @Parameter(names = { "-o", "--output" }, description = "Output", required = false)
+        public String output;
+
+	@Parameter(names = { "-v", "--service-version" }, description = "Optional version of the service being benchmarked, embedded in the final result", required = false)
+	public String serviceVersion;
     }
 
     public static void main(String[] args) throws Exception {
@@ -126,6 +132,7 @@ public class Benchmark {
         workloads.forEach((workloadName, workload) -> {
             arguments.drivers.forEach(driverConfig -> {
                 try {
+		    String beginTime = dateFormat.format(new Date());
                     File driverConfigFile = new File(driverConfig);
                     DriverConfiguration driverConfiguration = mapper.readValue(driverConfigFile,
                             DriverConfiguration.class);
@@ -140,9 +147,17 @@ public class Benchmark {
                     WorkloadGenerator generator = new WorkloadGenerator(driverConfiguration.name, workload, worker);
 
                     TestResult result = generator.run();
+		    result.beginTime = beginTime;
+		    result.endTime = dateFormat.format(new Date());
+		    result.version = arguments.serviceVersion;
 
-                    String fileName = String.format("%s-%s-%s.json", workloadName, driverConfiguration.name,
-                            dateFormat.format(new Date()));
+                    String fileName;
+                    if (arguments.output != null  && arguments.output.length() > 0) {
+                        fileName = arguments.output;
+                    } else {
+                        fileName = String.format("%s-%s-%s.json", workloadName, driverConfiguration.name,
+                                dateFormat.format(new Date()));
+                    }
 
                     log.info("Writing test result into {}", fileName);
                     writer.writeValue(new File(fileName), result);

@@ -19,7 +19,6 @@
 package io.openmessaging.benchmark.worker;
 
 import static java.util.stream.Collectors.toList;
-import static org.asynchttpclient.Dsl.asyncHttpClient;
 
 import java.io.File;
 import java.io.IOException;
@@ -27,10 +26,14 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.DataFormatException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 import org.HdrHistogram.Histogram;
 import org.apache.pulsar.common.util.FutureUtil;
@@ -55,19 +58,22 @@ import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
+import static org.asynchttpclient.Dsl.*;
 
 public class DistributedWorkersEnsemble implements Worker {
 
+    private final static int REQUEST_TIMEOUT_MS = 300_000;
+    private final static int READ_TIMEOUT_MS = 300_000;
     private final List<String> workers;
     private final List<String> producerWorkers;
     private final List<String> consumerWorkers;
 
-    private final AsyncHttpClient httpClient = asyncHttpClient();
+    private final AsyncHttpClient httpClient;
 
     private int numberOfUsedProducerWorkers;
 
     public DistributedWorkersEnsemble(List<String> workers) {
-        Preconditions.checkArgument(workers.size() > 1);
+        Preconditions.checkArgument(workers.size() > 1, "Workers must be > 1");
 
         this.workers = workers;
         List<List<String>> partitions = Lists.partition(workers, workers.size() / 2);
@@ -76,6 +82,8 @@ public class DistributedWorkersEnsemble implements Worker {
 
         log.info("Workers list - producers: {}", producerWorkers);
         log.info("Workers list - consumers: {}", consumerWorkers);
+
+        httpClient = asyncHttpClient(config().setRequestTimeout(REQUEST_TIMEOUT_MS).setReadTimeout(READ_TIMEOUT_MS));
     }
 
     @Override
@@ -94,8 +102,21 @@ public class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public void createProducers(List<String> topics) {
-        List<List<String>> topicsPerProducer = ListPartition.partitionList(topics,
-                                                            producerWorkers.size());
+        // topics is a normalized list i.e. it accounts for duplicated entries in case
+        // of m topics and n producers where m < n. In this case, map the topics as is
+        // to honor the number of producers per topic configured for the workload
+        List<List<String>> topicsPerProducer;
+        if (topics.size() <= producerWorkers.size()) {
+            topicsPerProducer = new ArrayList<>();
+            for (String topic : topics) {
+                List<String> topicList = new ArrayList<>();
+                topicList.add(topic);
+                topicsPerProducer.add(topicList);
+            }
+        } else {
+            topicsPerProducer = ListPartition.partitionList(topics, producerWorkers.size());
+        }
+
         Map<String, List<String>> topicsPerProducerMap = Maps.newHashMap();
         int i = 0;
         for (List<String> assignedTopics : topicsPerProducer) {
@@ -104,6 +125,8 @@ public class DistributedWorkersEnsemble implements Worker {
 
         // Number of actually used workers might be less than available workers
         numberOfUsedProducerWorkers = i;
+
+        log.info("Number of producers configured for the topic: " + numberOfUsedProducerWorkers);
 
         List<CompletableFuture<Void>> futures = topicsPerProducerMap.keySet().stream().map(producer -> {
             try {
@@ -155,9 +178,8 @@ public class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public void createConsumers(ConsumerAssignment overallConsumerAssignment) {
-        List<List<TopicSubscription>> subscriptionsPerConsumer = ListPartition.partitionList(
-                                                                        overallConsumerAssignment.topicsSubscriptions,
-                                                                        consumerWorkers.size());
+        List<List<TopicSubscription>> subscriptionsPerConsumer = ListPartition
+                .partitionList(overallConsumerAssignment.topicsSubscriptions, consumerWorkers.size());
         Map<String, ConsumerAssignment> topicsPerWorkerMap = Maps.newHashMap();
         int i = 0;
         for (List<TopicSubscription> tsl : subscriptionsPerConsumer) {
@@ -196,6 +218,9 @@ public class DistributedWorkersEnsemble implements Worker {
                 stats.publishLatency.add(Histogram.decodeFromCompressedByteBuffer(
                         ByteBuffer.wrap(is.publishLatencyBytes), TimeUnit.SECONDS.toMicros(30)));
 
+                stats.publishDelayLatency.add(Histogram.decodeFromCompressedByteBuffer(
+                        ByteBuffer.wrap(is.publishDelayLatencyBytes), TimeUnit.SECONDS.toMicros(30)));
+
                 stats.endToEndLatency.add(Histogram.decodeFromCompressedByteBuffer(
                         ByteBuffer.wrap(is.endToEndLatencyBytes), TimeUnit.HOURS.toMicros(12)));
             } catch (ArrayIndexOutOfBoundsException | DataFormatException e) {
@@ -216,8 +241,16 @@ public class DistributedWorkersEnsemble implements Worker {
                 stats.publishLatency.add(Histogram.decodeFromCompressedByteBuffer(
                         ByteBuffer.wrap(is.publishLatencyBytes), TimeUnit.SECONDS.toMicros(30)));
             } catch (Exception e) {
-                log.error("Failed to decode publish latency: {}",
-                        ByteBufUtil.prettyHexDump(Unpooled.wrappedBuffer(is.publishLatencyBytes)));
+                log.error("Failed to decode publish latency");
+                throw new RuntimeException(e);
+            }
+
+            try {
+                stats.publishDelayLatency.add(Histogram.decodeFromCompressedByteBuffer(
+                        ByteBuffer.wrap(is.publishDelayLatencyBytes), TimeUnit.SECONDS.toMicros(30)));
+            } catch (Exception e) {
+                log.error("Failed to decode publish delay latency: {}",
+                          ByteBufUtil.prettyHexDump(Unpooled.wrappedBuffer(is.publishDelayLatencyBytes)));
                 throw new RuntimeException(e);
             }
 
@@ -263,9 +296,10 @@ public class DistributedWorkersEnsemble implements Worker {
     private CompletableFuture<Void> sendPost(String host, String path, byte[] body) {
         return httpClient.preparePost(host + path).setBody(body).execute().toCompletableFuture().thenApply(x -> {
             if (x.getStatusCode() != 200) {
-                log.error("Failed to do HTTP post request to {}{} -- code: {}", host, path, x.getStatusCode());
+                log.error("Failed to do HTTP post request to {}{} -- code: {} error: {}", host, path, x.getStatusCode(),
+                        x.getResponseBody());
             }
-            Preconditions.checkArgument(x.getStatusCode() == 200);
+            Preconditions.checkArgument(x.getStatusCode() == 200, "Status should be 200");
             return (Void) null;
         });
     }
@@ -288,9 +322,10 @@ public class DistributedWorkersEnsemble implements Worker {
         return httpClient.prepareGet(host + path).execute().toCompletableFuture().thenApply(response -> {
             try {
                 if (response.getStatusCode() != 200) {
-                    log.error("Failed to do HTTP get request to {}{} -- code: {}", host, path, response.getStatusCode());
+                    log.error("Failed to do HTTP get request to {}{} -- code: {}", host, path,
+                            response.getStatusCode());
                 }
-                Preconditions.checkArgument(response.getStatusCode() == 200);
+                Preconditions.checkArgument(response.getStatusCode() == 200, "Status should be 200");
                 return mapper.readValue(response.getResponseBody(), clazz);
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -302,9 +337,11 @@ public class DistributedWorkersEnsemble implements Worker {
         return httpClient.preparePost(host + path).setBody(body).execute().toCompletableFuture().thenApply(response -> {
             try {
                 if (response.getStatusCode() != 200) {
-                    log.error("Failed to do HTTP post request to {}{} -- code: {}", host, path, response.getStatusCode());
+                    log.error("Failed to do HTTP post request to {}{} -- code: {}", host, path,
+                            response.getStatusCode());
                 }
-                Preconditions.checkArgument(response.getStatusCode() == 200);
+
+                Preconditions.checkArgument(response.getStatusCode() == 200, "Status should be 200");
                 return mapper.readValue(response.getResponseBody(), clazz);
             } catch (IOException e) {
                 throw new RuntimeException(e);

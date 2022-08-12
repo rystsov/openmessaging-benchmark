@@ -16,25 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.openmessaging.benchmark.worker.commands;
+package io.openmessaging.benchmark.driver.redpanda;
 
-import java.util.concurrent.TimeUnit;
+public class Config {
+    public short replicationFactor;
 
-import org.HdrHistogram.Histogram;
+    public boolean reset;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+    public String topicConfig;
 
-public class CumulativeLatencies {
+    public String commonConfig;
 
-    @JsonIgnore
-    public Histogram publishLatency = new Histogram(TimeUnit.SECONDS.toMicros(60), 5);
-    public byte[] publishLatencyBytes;
+    public String producerConfig;
 
-    @JsonIgnore
-    public Histogram publishDelayLatency = new Histogram(TimeUnit.SECONDS.toMicros(60), 5);
-    public byte[] publishDelayLatencyBytes;
-
-    @JsonIgnore
-    public Histogram endToEndLatency = new Histogram(TimeUnit.HOURS.toMicros(12), 5);
-    public byte[] endToEndLatencyBytes;
+    public String consumerConfig;
 }

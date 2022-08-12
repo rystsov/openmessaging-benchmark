@@ -34,6 +34,7 @@
 
 		<module>driver-pulsar</module>
 		<module>driver-kafka</module>
+		<module>driver-redpanda</module>
 		<module>driver-rabbitmq</module>
 		<module>driver-artemis</module>
 		<module>driver-bookkeeper</module>
@@ -87,6 +88,8 @@
 						<exclude>payload/**</exclude>
 						<exclude>**/*.pyc</exclude>
 						<exclude>**/.pydevproject</exclude>
+						<exclude>**/*.yml</exclude>
+						<exclude>**/*.j2</exclude>
 					</excludes>
 					<mapping>
 						<benchmark>SCRIPT_STYLE</benchmark>
